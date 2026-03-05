@@ -632,25 +632,31 @@
             roomRef = database.ref('rooms/' + roomId);
             roomRef.get().then((snapshot) => {
                 if (!snapshot.exists()) return alert("방이 존재하지 않습니다.");
-                const data = snapshot.val();
-                
-                if (!data.players.b && data.status === 'waiting') {
-                    // 참가자 (흑) 로 입장
-                    roomRef.child('players').update({ b: myNickname });
-                    roomRef.update({ status: 'playing' }).then(() => {
-                        currentRoomId = roomId;
-                        myRole = 'b';
-                        startGame(data);
-                    });
-                } else {
-                    // 이미 게임 중이면 관전자(Spectator)로 입장
+
+                // B 슬롯 선점은 트랜잭션으로 원자적으로 처리 (모바일 동시 접속 레이스 방지)
+                roomRef.child('players/b').transaction((currentB) => {
+                    if (currentB === null || currentB === undefined || currentB === '') {
+                        return myNickname;
+                    }
+                    return;
+                }).then((txResult) => {
+                    if (txResult.committed) {
+                        // 참가자(흑) 입장 성공
+                        return roomRef.child('status').set('playing').then(() => roomRef.get()).then((latest) => {
+                            currentRoomId = roomId;
+                            myRole = 'b';
+                            startGame(latest.val());
+                        });
+                    }
+
+                    // 이미 흑이 있으면 관전자(Spectator)로 입장
                     const specId = "spec_" + Math.random().toString(36).substring(2, 6);
-                    roomRef.child('spectators').update({ [specId]: myNickname }).then(() => {
+                    return roomRef.child('spectators').update({ [specId]: myNickname }).then(() => roomRef.get()).then((latest) => {
                         currentRoomId = roomId;
                         myRole = 'spectator';
-                        startGame(data);
+                        startGame(latest.val());
                     });
-                }
+                });
             });
         }
 
