@@ -116,8 +116,13 @@
             }
 
             #game-screen {
-                height: calc(100dvh - 1rem);
-                max-height: calc(100dvh - 1rem);
+                position: fixed;
+                top: 0.5rem;
+                left: 50%;
+                width: min(96vw, 980px);
+                max-width: none;
+                transform: translateX(-50%) scale(min(1, calc((100dvh - 1rem) / 980)));
+                transform-origin: top center;
                 gap: 0.5rem;
             }
 
@@ -137,6 +142,19 @@
 
             .square {
                 font-size: clamp(1.3rem, 3.6dvh, 2.2rem);
+            }
+
+            #emote-anchor-b {
+                right: auto !important;
+                left: 0 !important;
+            }
+            #emote-anchor-w {
+                left: 0 !important;
+                right: auto !important;
+            }
+            .emote-bubble {
+                min-width: 180px;
+                max-width: min(88vw, 320px);
             }
         }
         @keyframes popUp {
