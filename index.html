@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Chessboxing Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #120c09;
+            --panel-bg: #3e2723;
+            --text-main: #d7ccc8;
+            --gold: #ffb300;
+        }
+
+        body {
+            font-family: 'VT323', monospace;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            text-transform: uppercase;
+            user-select: none;
+            overflow-x: hidden;
+        }
+
+        /* CRT Effect */
+        body::after {
+            content: " "; display: block; position: fixed; inset: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+            z-index: 9999; background-size: 100% 4px; pointer-events: none;
+        }
+
+        .pixel-box {
+            background-color: var(--panel-bg);
+            border: 4px solid #a1887f;
+            box-shadow: 8px 8px 0px rgba(0,0,0,0.5);
+        }
+        .fighter-icon {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border: 2px solid #9ca3af;
+            background: #111827;
+            flex-shrink: 0;
+        }
+
+        .pixel-btn {
+            border: 2px solid white; box-shadow: 4px 4px 0px black;
+            transition: transform 0.1s, box-shadow 0.1s;
+            text-transform: uppercase; font-weight: bold; cursor: pointer;
+        }
+        .pixel-btn:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px black; }
+        .pixel-btn:hover { background-color: var(--gold); color: black; }
+        .pixel-btn:disabled { filter: grayscale(100%); opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+        /* Chess Board Styles */
+        #board {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            grid-template-rows: repeat(8, minmax(0, 1fr));
+            width: 100%; max-width: 480px; aspect-ratio: 1;
+            border: 4px solid var(--gold);
+            box-sizing: border-box;
+        }
+        .square {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            font-size: 2.5rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .square-light { background-color: #d18b47; }
+        .square-dark { background-color: #ffce9e; color: black; }
+        .selected { background-color: rgba(255, 255, 0, 0.5) !important; }
+        .valid-move::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 50%;
+        }
+
+        /* Emote Animations */
+        .emote-bubble {
+            position: absolute; padding: 8px 16px; background: white; color: black;
+            border: 2px solid black; border-radius: 12px; font-weight: bold; font-size: 1.2rem;
+            opacity: 0; transform: translateY(10px); z-index: 50;
+            animation: popUp 2.5s ease-in-out forwards;
+            pointer-events: none;
+            display: inline-block;
+            writing-mode: horizontal-tb;
+            min-width: 240px;
+            width: fit-content;
+            max-width: min(80vw, 460px);
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+        @keyframes popUp {
+            0% { opacity: 0; transform: translateY(10px) scale(0.8); }
+            10% { opacity: 1; transform: translateY(0) scale(1.1); }
+            20% { transform: scale(1); }
+            80% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+
+        /* Scrollbar for Combat Log */
+        #combat-log::-webkit-scrollbar { width: 8px; }
+        #combat-log::-webkit-scrollbar-thumb { background: var(--gold); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 relative">
+
+    <div id="lobby-screen" class="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+        <div class="pixel-box p-10 text-center border-4 border-yellow-400">
+            <h1 class="text-6xl font-bold text-red-500 mb-2 drop-shadow-[4px_4px_0_#fff]">CHESSBOXING</h1>
+            <p class="text-xl text-gray-300 mb-8">BRAIN & BRAWN</p>
+            
+            <input type="text" id="nickname-input" placeholder="YOUR NICKNAME" class="w-64 p-3 bg-black text-white text-center border-2 border-gray-500 outline-none mb-4 text-xl">
+
+            <div class="flex flex-col gap-4 w-64 mx-auto">
+                <button onclick="createRoom()" class="pixel-btn bg-red-600 text-white py-3 text-2xl hover:bg-red-500">CREATE ROOM</button>
+                <div class="flex gap-2">
+                    <input type="text" id="room-code-input" placeholder="SEED CODE" class="flex-1 p-2 bg-black text-white text-center border-2 border-gray-500 outline-none uppercase font-bold">
+                    <button onclick="joinRoom()" class="pixel-btn bg-blue-600 text-white px-4">JOIN</button>
+                </div>
+            </div>
+            <div id="lobby-status" class="mt-6 text-yellow-300 text-lg h-6"></div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="hidden w-full max-w-5xl flex-col lg:flex-row gap-6">
+        
+        <div class="flex flex-col w-full lg:w-1/3 gap-4">
+            <div class="pixel-box p-4 text-center relative">
+                <div id="spectator-badge" class="hidden absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 border-2 border-white font-bold animate-pulse">👀 SPECTATING</div>
+                <h2 id="phase-display" class="text-4xl font-bold text-yellow-400 mb-2">PHASE: BOXING</h2>
+                <div id="turn-display" class="text-xl text-gray-300">WAITING...</div>
+            </div>
+
+            <div class="pixel-box p-4 flex flex-col gap-4">
+                <div class="relative flex items-center gap-3">
+                    <img id="player-b-icon" class="fighter-icon" src="resources/k1.png" alt="BLACK ICON">
+                    <div class="flex-1">
+                        <div class="flex justify-between mb-1">
+                            <span id="player-b-name" class="font-bold text-blue-300">OPPONENT (BLACK)</span>
+                            <span id="player-b-hp-text" class="text-red-400">100 / 100</span>
+                        </div>
+                        <div class="w-full bg-gray-800 h-6 border-2 border-gray-600 relative">
+                            <div id="player-b-hp-bar" class="bg-red-600 h-full w-full transition-all duration-300"></div>
+                            <div id="emote-anchor-b" class="absolute -right-4 top-0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center text-gray-500 text-xl font-bold">VS</div>
+
+                <div class="relative flex items-center gap-3">
+                    <img id="player-w-icon" class="fighter-icon" src="resources/h1.png" alt="WHITE ICON">
+                    <div class="flex-1">
+                        <div class="flex justify-between mb-1">
+                            <span id="player-w-name" class="font-bold text-yellow-300">ME (WHITE)</span>
+                            <span id="player-w-hp-text" class="text-red-400">100 / 100</span>
+                        </div>
+                        <div class="w-full bg-gray-800 h-6 border-2 border-gray-600 relative">
+                            <div id="player-w-hp-bar" class="bg-red-600 h-full w-full transition-all duration-300"></div>
+                            <div id="emote-anchor-w" class="absolute -left-4 top-0"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="emote-panel" class="pixel-box p-2 grid grid-cols-4 gap-2">
+                <button onclick="sendCharacterEmote('greet')" class="pixel-btn bg-gray-700 text-white py-1 text-sm">👋 Greet</button>
+                <button onclick="sendCharacterEmote('well')" class="pixel-btn bg-gray-700 text-white py-1 text-sm">👏 Well</button>
+                <button onclick="sendCharacterEmote('oops')" class="pixel-btn bg-gray-700 text-white py-1 text-sm">💦 Oops</button>
+                <button onclick="sendCharacterEmote('threat')" class="pixel-btn bg-gray-700 text-white py-1 text-sm">🔥 Threat</button>
+            </div>
+
+            <div id="boxing-controls" class="pixel-box p-4">
+                <h3 class="text-2xl text-red-400 mb-2 border-b-2 border-gray-600 pb-1">BOXING ACTIONS</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-jab" onclick="doBoxingAction('JAB')" class="pixel-btn bg-red-800 text-white py-3 text-xl hover:bg-red-600 disabled:opacity-50">JAB (Fast)</button>
+                    <button id="btn-hook" onclick="doBoxingAction('HOOK')" class="pixel-btn bg-red-800 text-white py-3 text-xl hover:bg-red-600 disabled:opacity-50">HOOK (Heavy)</button>
+                    <button id="btn-guard" onclick="doBoxingAction('GUARD')" class="pixel-btn bg-blue-800 text-white py-3 text-xl hover:bg-blue-600 disabled:opacity-50">GUARD (Defend)</button>
+                    <button id="btn-counter" onclick="doBoxingAction('COUNTER')" class="pixel-btn bg-purple-800 text-white py-3 text-xl hover:bg-purple-600 disabled:opacity-50">COUNTER (Read)</button>
+                </div>
+                <div id="boxing-submit-status" class="mt-3 text-center text-cyan-300 text-lg">CHOOSE YOUR ACTION</div>
+            </div>
+        </div>
+
+        <div class="flex flex-col w-full lg:w-2/3 items-center">
+            
+            <div id="combat-log-container" class="pixel-box w-full max-w-[480px] h-48 mb-4 p-3 overflow-hidden flex flex-col">
+                <h3 class="text-yellow-400 mb-1 border-b border-gray-600">COMBAT LOG</h3>
+                <div id="combat-log" class="flex-1 overflow-y-auto text-sm space-y-1 pr-2">
+                    </div>
+            </div>
+
+            <div id="board-play-area" class="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-4">
+                <div id="board-container" class="pixel-box p-2 bg-gray-900 shadow-[0_0_30px_rgba(0,0,0,0.8)] hidden">
+                    <div id="board"></div>
+                </div>
+                <div id="chess-timer-panel" class="pixel-box hidden p-4 min-w-[170px] text-center border-4 border-cyan-400">
+                    <div class="text-base text-cyan-200 mb-2">CHESS TIMER</div>
+                    <div id="chess-timer-display" class="text-5xl text-cyan-300 font-bold leading-none">--</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="character-select-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+        <div class="pixel-box p-8 text-center border-4 border-cyan-400 max-w-2xl w-[95%]">
+            <h2 class="text-5xl text-cyan-300 mb-3">SELECT CHARACTER</h2>
+            <p id="character-select-desc" class="text-lg text-gray-200 mb-6">캐릭터를 선택하면 경기 시작</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-left">
+                <button onclick="selectCharacter('kang')" class="pixel-btn bg-red-800 text-white p-3">
+                    <div class="text-3xl font-bold text-center">강호동</div>
+                </button>
+                <button onclick="selectCharacter('kim')" class="pixel-btn bg-blue-800 text-white p-3">
+                    <div class="text-3xl font-bold text-center">김동현</div>
+                </button>
+                <button onclick="selectCharacter('lee')" class="pixel-btn bg-emerald-800 text-white p-3">
+                    <div class="text-3xl font-bold text-center">이세돌</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-modal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+        <div class="pixel-box p-12 text-center border-4 border-yellow-400">
+            <h2 id="end-title" class="text-6xl font-bold text-white mb-4 drop-shadow-[4px_4px_0_#f00]">KO!</h2>
+            <p id="end-msg" class="text-3xl text-gray-300 mb-8">PLAYER WINS</p>
+            <button onclick="location.reload()" class="pixel-btn bg-blue-600 text-white px-8 py-3 text-2xl">BACK TO LOBBY</button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. FIREBASE SETUP (본인 정보로 수정 필수)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBPPv2B3_0ZzU_aTsEniJCmwfdrcXFEJyE",
+            authDomain: "phaser-753de.firebaseapp.com",
+            projectId: "phaser-753de",
+            storageBucket: "phaser-753de.firebasestorage.app",
+            messagingSenderId: "515995330506",
+            appId: "1:515995330506:web:8e981dfbd5e8b4e7559133",
+            measurementId: "G-P67WTXRYFM"
+        };
+
+        let database;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+        } catch (e) {
+            console.error("Firebase Init Error:", e);
+            document.getElementById('lobby-status').innerText = "FIREBASE CONFIG REQUIRED";
+        }
+
+        // ==========================================
+        // 2. GLOBAL STATE
+        // ==========================================
+        let currentRoomId = null;
+        let myRole = null; // 'w' (방장), 'b' (참가자), 'spectator' (관전)
+        let myNickname = "Player";
+        let roomRef = null;
+        let playersByRole = { w: 'WHITE', b: 'BLACK' };
+        let latestGameState = null;
+        let isResolvingBoxingRound = false;
+        
+        // Chess.js Instance
+        const chess = new Chess();
+        let selectedSquare = null;
+        let isMyTurn = false;
+        
+        // Game Settings
+        const MAX_BOXING_TURNS = 3; // 복싱 라운드 3회
+        const MAX_CHESS_MOVES = 3;  // 체스 라운드 3수
+        const BOXING_BASE_DAMAGE = { small: 8, medium: 14, large: 22, xlarge: 32 };
+        const BOXING_ACTION_LABEL = { JAB: '잽', HOOK: '훅', GUARD: '가드', COUNTER: '카운터' };
+        const CHARACTER_STATS = {
+            kang: { name: '강호동', damageMultiplier: 2.0, missFactor: 0.8, chessTime: 5 },
+            kim: { name: '김동현', damageMultiplier: 1.5, missFactor: 0.2, chessTime: 7 },
+            lee: { name: '이세돌', damageMultiplier: 1.0, missFactor: 0.5, chessTime: 12 }
+        };
+        const CHARACTER_ICONS = {
+            kang: { normal: 'resources/h1.png', lowHp: 'resources/h2.png' },
+            kim: { normal: 'resources/k1.png', lowHp: 'resources/k2.png' },
+            lee: { normal: 'resources/l1.png', lowHp: 'resources/l2.png' }
+        };
+        const CHARACTER_EMOTES = {
+            kang: {
+                greet: [
+                    "안녕하십니꺼! 강호동입니데이~!",
+                    "반갑데이! 팍팍 밀어주이소!",
+                    "호동이 왔어예~ 행님들!"
+                ],
+                well: [
+                    "아주 칭찬해~ 이야 대단하데이!",
+                    "기가 막히네! 스웩이 넘친다 아이가!",
+                    "머선 129! 우째 이리 잘하노!"
+                ],
+                oops: [
+                    "아이고야... 내 미쳤다 진짜...",
+                    "쮸빠찌에!! 내 손가락이 와 이라노!",
+                    "이거 완전 방송사고 아이가!"
+                ],
+                threat: [
+                    "행님, 팍팍 깎아뿌겠습니데이!",
+                    "내 주먹 맛 좀 볼래? 어흥~!",
+                    "확 마, 씨름판이었으면 넌 벌써 넘어갔데이!"
+                ]
+            },
+            kim: {
+                greet: [
+                    "안녕하십니까, 스턴건 김동현입니다.",
+                    "오케이, 옥타곤에 오신 걸 환영합니다.",
+                    "매미킴 등장! 잘 부탁드립니다."
+                ],
+                well: [
+                    "오, 방금 펀치(수) 좀 매서웠습니다.",
+                    "나이스 타이밍! 인정합니다.",
+                    "운동 좀 하셨나 보네. 폼이 좋습니다."
+                ],
+                oops: [
+                    "아, 잠시만요! 쥐 났어요 쥐!",
+                    "어어어? 이게 아닌데... (동공지진)",
+                    "방금 건 페이크입니다. 작전의 일부죠."
+                ],
+                threat: [
+                    "제 펀치 맞으면 진짜 기절합니다. 조심하세요.",
+                    "매미권 한 번 들어가면 끝입니다.",
+                    "스파링한다고 생각하고 살살 해드릴게요."
+                ]
+            },
+            lee: {
+                greet: [
+                    "안녕하세요, 이세돌입니다.",
+                    "좋은 대국(매치) 부탁드립니다.",
+                    "바둑 대신 체스복싱으로 뵙네요. 반갑습니다."
+                ],
+                well: [
+                    "묘수네요. 훌륭한 한 수였습니다.",
+                    "흐름을 잘 읽으시는군요.",
+                    "예상치 못한 공격이네요. 감탄했습니다."
+                ],
+                oops: [
+                    "아... 치명적인 악수(惡手)를 두었군요.",
+                    "이런 실수를 하다니, 아직 멀었네요.",
+                    "판이 조금 꼬였네요. 당황스럽습니다."
+                ],
+                threat: [
+                    "자신이 없어요. 질 자신이.",
+                    "체스판 위에 의미 없는 말은 없습니다.",
+                    "그 정도 수읽기로는 저를 넘을 수 없습니다."
+                ]
+            }
+        };
+        const DEFAULT_CHARACTER_KEY = 'lee';
+        let chessTimerInterval = null;
+        let chessTimerSyncKey = null;
+
+        // ==========================================
+        // 3. LOBBY LOGIC (매칭 및 관전)
+        // ==========================================
+        function createRoom() {
+            if (!database) return alert("Firebase Config를 입력하세요.");
+            myNickname = document.getElementById('nickname-input').value.trim() || "White_Boxer";
+            
+            // 시드 생성 (6자리 영숫자)
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            roomRef = database.ref('rooms/' + roomId);
+            
+            document.getElementById('lobby-status').innerText = `CREATING ROOM...`;
+
+            roomRef.set({
+                status: 'waiting',
+                players: { w: myNickname },
+                gameState: {
+                    phase: 'BOXING',
+                    turn: 'w',
+                    boxingTurnsLeft: MAX_BOXING_TURNS,
+                    boxingRound: 1,
+                    boxingSelections: { w: null, b: null },
+                    chessMovesLeft: MAX_CHESS_MOVES,
+                    hp: { w: 100, b: 100 },
+                    guard: { w: false, b: false },
+                    characters: { w: null, b: null },
+                    fen: chess.fen(),
+                    winner: null
+                }
+            }).then(() => {
+                currentRoomId = roomId;
+                myRole = 'w';
+                document.getElementById('lobby-status').innerHTML = `
+                    ROOM CREATED!<br>
+                    SHARE SEED:
+                    <span id="created-room-code" class="text-white font-bold bg-blue-600 px-2">${roomId}</span>
+                    <button onclick="copyRoomCode()" class="pixel-btn bg-green-700 text-white px-2 py-1 ml-2 text-sm align-middle">COPY</button>
+                    <br>
+                    WAITING FOR OPPONENT...
+                `;
+                listenForGameStart();
+            });
+        }
+
+        async function copyRoomCode() {
+            const code = currentRoomId || (document.getElementById('created-room-code')?.innerText ?? '').trim();
+            if (!code) return;
+
+            try {
+                await navigator.clipboard.writeText(code);
+            } catch (e) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = code;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+            }
+
+            const statusEl = document.getElementById('lobby-status');
+            statusEl.innerHTML = `
+                ROOM CREATED!<br>
+                SHARE SEED:
+                <span id="created-room-code" class="text-white font-bold bg-blue-600 px-2">${code}</span>
+                <button onclick="copyRoomCode()" class="pixel-btn bg-green-700 text-white px-2 py-1 ml-2 text-sm align-middle">COPIED!</button>
+                <br>
+                WAITING FOR OPPONENT...
+            `;
+        }
+
+        function normalizeCharacters(characters) {
+            return {
+                w: characters?.w || null,
+                b: characters?.b || null
+            };
+        }
+
+        function getCharacterStats(characterKey) {
+            return CHARACTER_STATS[characterKey] || CHARACTER_STATS[DEFAULT_CHARACTER_KEY];
+        }
+
+        function getRoleCharacterKey(state, role) {
+            const characters = normalizeCharacters(state?.characters);
+            return characters[role];
+        }
+
+        function getRoleCharacterStats(state, role) {
+            const characterKey = getRoleCharacterKey(state, role) || DEFAULT_CHARACTER_KEY;
+            return getCharacterStats(characterKey);
+        }
+
+        function getCharacterIconPath(characterKey, hp) {
+            const key = characterKey || DEFAULT_CHARACTER_KEY;
+            const iconSet = CHARACTER_ICONS[key] || CHARACTER_ICONS[DEFAULT_CHARACTER_KEY];
+            const isLowHp = Number(hp) <= 50;
+            return isLowHp ? iconSet.lowHp : iconSet.normal;
+        }
+
+        function updatePlayerIcons(state) {
+            const wCharacter = getRoleCharacterKey(state, 'w') || DEFAULT_CHARACTER_KEY;
+            const bCharacter = getRoleCharacterKey(state, 'b') || DEFAULT_CHARACTER_KEY;
+            const wHp = state?.hp?.w ?? 100;
+            const bHp = state?.hp?.b ?? 100;
+
+            const wIconEl = document.getElementById('player-w-icon');
+            const bIconEl = document.getElementById('player-b-icon');
+
+            wIconEl.src = getCharacterIconPath(wCharacter, wHp);
+            bIconEl.src = getCharacterIconPath(bCharacter, bHp);
+        }
+
+        function getPlayerDisplayName(players, role, state) {
+            const baseName = players?.[role] || (role === 'w' ? 'WHITE' : 'BLACK');
+            const characterKey = getRoleCharacterKey(state, role);
+            if (!characterKey) return `${baseName} [선택 중]`;
+            return `${baseName} [${getCharacterStats(characterKey).name}]`;
+        }
+
+        function isCharacterSelectionReady(state) {
+            const characters = normalizeCharacters(state?.characters);
+            return Boolean(characters.w && characters.b);
+        }
+
+        function normalizeBoxingSelections(selections) {
+            return {
+                w: selections?.w || null,
+                b: selections?.b || null
+            };
+        }
+
+        function applyBoxingDamageByType(state, attackerRole, defenderRole, damageType, logs) {
+            if (!damageType) return;
+            const attackerStats = getRoleCharacterStats(state, attackerRole);
+            const hitChance = 1 - attackerStats.missFactor;
+            if (Math.random() > hitChance) {
+                logs.push(`[복싱] ${attackerStats.name}의 ${BOXING_ACTION_LABEL[state.boxingSelections[attackerRole]]}이(가) 빗나감`);
+                return;
+            }
+
+            const baseDamage = BOXING_BASE_DAMAGE[damageType];
+            const finalDamage = Math.max(1, Math.floor(baseDamage * attackerStats.damageMultiplier));
+            state.hp[defenderRole] = Math.max(0, state.hp[defenderRole] - finalDamage);
+            logs.push(`[복싱] ${attackerStats.name} 적중! ${defenderRole === 'w' ? 'WHITE' : 'BLACK'} -${finalDamage} HP (${damageType})`);
+        }
+
+        function resolveBoxingMatrix(wAction, bAction) {
+            const A = wAction;
+            const B = bAction;
+
+            if (A === 'JAB' && B === 'JAB') return { wToB: 'small', bToW: 'small', title: '크로스' };
+            if (A === 'HOOK' && B === 'HOOK') return { wToB: 'large', bToW: 'large', title: '난타전' };
+            if (A === 'GUARD' && B === 'GUARD') return { wToB: null, bToW: null, title: '눈치 싸움' };
+            if (A === 'COUNTER' && B === 'COUNTER') return { wToB: null, bToW: null, title: '경계' };
+
+            if (A === 'JAB' && B === 'HOOK') return { wToB: 'small', bToW: null, title: '선빵' };
+            if (A === 'HOOK' && B === 'JAB') return { wToB: null, bToW: 'small', title: '선빵' };
+
+            if (A === 'JAB' && B === 'GUARD') return { wToB: null, bToW: null, title: '방어' };
+            if (A === 'GUARD' && B === 'JAB') return { wToB: null, bToW: null, title: '방어' };
+
+            if (A === 'JAB' && B === 'COUNTER') return { wToB: null, bToW: 'medium', title: '역공' };
+            if (A === 'COUNTER' && B === 'JAB') return { wToB: 'medium', bToW: null, title: '역공' };
+
+            if (A === 'HOOK' && B === 'GUARD') return { wToB: 'large', bToW: null, title: '가드 크러시' };
+            if (A === 'GUARD' && B === 'HOOK') return { wToB: null, bToW: 'large', title: '가드 크러시' };
+
+            if (A === 'HOOK' && B === 'COUNTER') return { wToB: null, bToW: 'xlarge', title: '치명타' };
+            if (A === 'COUNTER' && B === 'HOOK') return { wToB: 'xlarge', bToW: null, title: '치명타' };
+
+            if (A === 'GUARD' && B === 'COUNTER') return { wToB: null, bToW: null, title: '헛스윙' };
+            if (A === 'COUNTER' && B === 'GUARD') return { wToB: null, bToW: null, title: '헛스윙' };
+
+            return { wToB: null, bToW: null, title: '무효' };
+        }
+
+        function resolveBoxingRoundIfReady() {
+            if (myRole === 'spectator' || !roomRef || isResolvingBoxingRound) return;
+            isResolvingBoxingRound = true;
+
+            roomRef.child('gameState').get().then((snapshot) => {
+                if (!snapshot.exists()) return;
+                const state = snapshot.val();
+                state.characters = normalizeCharacters(state.characters);
+                state.boxingSelections = normalizeBoxingSelections(state.boxingSelections);
+
+                if (state.phase !== 'BOXING' || state.winner) return;
+                if (!state.boxingSelections.w || !state.boxingSelections.b) return;
+
+                const matrix = resolveBoxingMatrix(state.boxingSelections.w, state.boxingSelections.b);
+                const logs = [
+                    `[복싱 ${state.boxingRound || 1}R] WHITE(${BOXING_ACTION_LABEL[state.boxingSelections.w]}) vs BLACK(${BOXING_ACTION_LABEL[state.boxingSelections.b]}) - ${matrix.title}`
+                ];
+
+                applyBoxingDamageByType(state, 'w', 'b', matrix.wToB, logs);
+                applyBoxingDamageByType(state, 'b', 'w', matrix.bToW, logs);
+
+                if (state.hp.w <= 0) state.winner = 'b';
+                if (state.hp.b <= 0) state.winner = 'w';
+
+                state.boxingTurnsLeft -= 1;
+                state.boxingRound = (state.boxingRound || 1) + 1;
+                state.boxingSelections = { w: null, b: null };
+
+                if (state.boxingTurnsLeft <= 0 && !state.winner) {
+                    state.phase = 'CHESS';
+                    state.chessMovesLeft = MAX_CHESS_MOVES;
+                    logs.push('딩딩! 체스 페이즈로 넘어갑니다.');
+                }
+
+                roomRef.child('gameState').update(state).then(() => {
+                    logs.forEach((line) => sendLog(line));
+                });
+            }).finally(() => {
+                isResolvingBoxingRound = false;
+            });
+        }
+
+        function updateCharacterSelectionModal(state) {
+            const modal = document.getElementById('character-select-modal');
+            const desc = document.getElementById('character-select-desc');
+            if (myRole === 'spectator') {
+                modal.classList.add('hidden');
+                return;
+            }
+
+            const characters = normalizeCharacters(state?.characters);
+            const myCharacter = characters[myRole];
+            const opponentRole = myRole === 'w' ? 'b' : 'w';
+            const opponentCharacter = characters[opponentRole];
+
+            if (!myCharacter) {
+                modal.classList.remove('hidden');
+                desc.innerText = '캐릭터를 선택하면 경기 시작';
+                return;
+            }
+
+            if (!opponentCharacter) {
+                modal.classList.remove('hidden');
+                desc.innerText = `내 선택: ${getCharacterStats(myCharacter).name} / 상대 선택 대기 중`;
+                return;
+            }
+
+            modal.classList.add('hidden');
+        }
+
+        function selectCharacter(characterKey) {
+            if (myRole === 'spectator' || !roomRef) return;
+            if (!CHARACTER_STATS[characterKey]) return;
+            roomRef.child(`gameState/characters/${myRole}`).set(characterKey);
+        }
+
+        function joinRoom() {
+            if (!database) return alert("Firebase Config를 입력하세요.");
+            myNickname = document.getElementById('nickname-input').value.trim() || "Black_Boxer";
+            const roomId = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (!roomId) return alert("SEED를 입력하세요.");
+
+            roomRef = database.ref('rooms/' + roomId);
+            roomRef.get().then((snapshot) => {
+                if (!snapshot.exists()) return alert("방이 존재하지 않습니다.");
+                const data = snapshot.val();
+                
+                if (!data.players.b && data.status === 'waiting') {
+                    // 참가자 (흑) 로 입장
+                    roomRef.child('players').update({ b: myNickname });
+                    roomRef.update({ status: 'playing' }).then(() => {
+                        currentRoomId = roomId;
+                        myRole = 'b';
+                        startGame(data);
+                    });
+                } else {
+                    // 이미 게임 중이면 관전자(Spectator)로 입장
+                    const specId = "spec_" + Math.random().toString(36).substring(2, 6);
+                    roomRef.child('spectators').update({ [specId]: myNickname }).then(() => {
+                        currentRoomId = roomId;
+                        myRole = 'spectator';
+                        startGame(data);
+                    });
+                }
+            });
+        }
+
+        function listenForGameStart() {
+            roomRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && data.status === 'playing') {
+                    roomRef.off('value'); // 리스너 교체
+                    startGame(data);
+                }
+            });
+        }
+
+        // ==========================================
+        // 4. GAME SYNC LOGIC
+        // ==========================================
+        function startGame(initialData) {
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('flex');
+
+            // 닉네임 표시
+            playersByRole = {
+                w: initialData.players?.w || 'WHITE',
+                b: initialData.players?.b || 'BLACK'
+            };
+            if (myRole === 'w') playersByRole.w = myNickname;
+            if (myRole === 'b') playersByRole.b = myNickname;
+            const firstState = initialData.gameState || {};
+            document.getElementById('player-w-name').innerText = getPlayerDisplayName(playersByRole, 'w', firstState);
+            document.getElementById('player-b-name').innerText = getPlayerDisplayName(playersByRole, 'b', firstState);
+
+            // 관전자 UI 처리
+            if (myRole === 'spectator') {
+                document.getElementById('spectator-badge').classList.remove('hidden');
+                document.getElementById('emote-panel').classList.add('hidden'); // 감정표현 숨김
+                disableAllInputs();
+            }
+
+            // 실시간 상태 리스너 등록
+            roomRef.child('gameState').on('value', (snapshot) => {
+                if (!snapshot.exists()) return;
+                const state = snapshot.val();
+                updateUI(state);
+            });
+
+            // 실시간 로그 리스너 등록
+            roomRef.child('logs').on('child_added', (snapshot) => {
+                addLogToBox(snapshot.val().text);
+            });
+
+            // 실시간 감정표현 리스너 등록
+            roomRef.child('emotes').on('child_added', (snapshot) => {
+                showEmote(snapshot.val());
+            });
+
+            // 체스 보드 렌더링 준비
+            renderChessBoard();
+        }
+
+        function updateUI(state) {
+            latestGameState = state;
+            state.characters = normalizeCharacters(state.characters);
+            state.boxingSelections = normalizeBoxingSelections(state.boxingSelections);
+            document.getElementById('player-w-name').innerText = getPlayerDisplayName(playersByRole, 'w', state);
+            document.getElementById('player-b-name').innerText = getPlayerDisplayName(playersByRole, 'b', state);
+            updatePlayerIcons(state);
+            updateCharacterSelectionModal(state);
+
+            // 승패 판정 확인
+            if (state.winner) {
+                stopChessTimer();
+                showGameOver(state.winner);
+                return;
+            }
+
+            // 1. HP Bar 업데이트
+            document.getElementById('player-w-hp-bar').style.width = `${state.hp.w}%`;
+            document.getElementById('player-b-hp-bar').style.width = `${state.hp.b}%`;
+            document.getElementById('player-w-hp-text').innerText = `${state.hp.w} / 100`;
+            document.getElementById('player-b-hp-text').innerText = `${state.hp.b} / 100`;
+
+            // 2. 턴 및 페이즈 표시
+            const turnName = state.turn === 'w' ? 'WHITE' : 'BLACK';
+            const turnColor = state.turn === 'w' ? 'text-yellow-300' : 'text-blue-300';
+            document.getElementById('turn-display').innerHTML = `TURN: <span class="${turnColor} font-bold">${turnName}</span>`;
+            document.getElementById('phase-display').innerText = `PHASE: ${state.phase}`;
+
+            // 3. 내 턴 여부 계산
+            isMyTurn = (myRole === state.turn);
+
+            // 캐릭터 선택이 끝나기 전에는 플레이 잠금
+            if (!isCharacterSelectionReady(state)) {
+                stopChessTimer();
+                document.getElementById('chess-timer-panel').classList.add('hidden');
+                document.getElementById('turn-display').innerText = 'TURN: CHARACTER SELECT';
+                document.getElementById('boxing-controls').classList.add('hidden');
+                document.getElementById('board-container').classList.add('hidden');
+                disableAllInputs();
+                return;
+            }
+
+            // 4. 페이즈에 따른 화면 토글 및 컨트롤 활성화
+            if (state.phase === 'BOXING') {
+                stopChessTimer();
+                document.getElementById('chess-timer-panel').classList.add('hidden');
+                document.getElementById('boxing-controls').classList.remove('hidden');
+                document.getElementById('board-container').classList.add('hidden');
+                document.getElementById('turn-display').innerHTML = 'TURN: <span class="text-cyan-300 font-bold">SIMULTANEOUS PICK</span>';
+                const mySubmitted = myRole === 'spectator' ? true : Boolean(state.boxingSelections[myRole]);
+                const opponentRole = myRole === 'w' ? 'b' : 'w';
+                const opponentSubmitted = myRole === 'spectator' ? false : Boolean(state.boxingSelections[opponentRole]);
+                const statusEl = document.getElementById('boxing-submit-status');
+                if (myRole === 'spectator') {
+                    statusEl.innerText = 'SPECTATOR MODE';
+                } else if (!mySubmitted) {
+                    statusEl.innerText = `ROUND ${state.boxingRound || 1} - 행동을 선택하세요`;
+                } else if (!opponentSubmitted) {
+                    statusEl.innerText = '제출 완료. 상대 입력 대기 중...';
+                } else {
+                    statusEl.innerText = '양측 입력 완료. 판정 중...';
+                    resolveBoxingRoundIfReady();
+                }
+
+                // 버튼 활성화/비활성화 (동시 입력)
+                const btns = document.querySelectorAll('#boxing-controls button');
+                btns.forEach(btn => btn.disabled = (myRole === 'spectator' || mySubmitted));
+            } else {
+                document.getElementById('boxing-controls').classList.add('hidden');
+                document.getElementById('board-container').classList.remove('hidden');
+                document.getElementById('chess-timer-panel').classList.remove('hidden');
+                startChessTimer(state);
+                
+                // 체스 상태 동기화
+                if (chess.fen() !== state.fen) {
+                    chess.load(state.fen);
+                }
+                renderChessBoard();
+            }
+
+            // 관전자 예외 처리 (강제 비활성화)
+            if (myRole === 'spectator') disableAllInputs();
+        }
+
+        function disableAllInputs() {
+            const btns = document.querySelectorAll('#boxing-controls button');
+            btns.forEach(btn => btn.disabled = true);
+            isMyTurn = false;
+        }
+
+        function stopChessTimer() {
+            if (chessTimerInterval) {
+                clearInterval(chessTimerInterval);
+                chessTimerInterval = null;
+            }
+            chessTimerSyncKey = null;
+            document.getElementById('chess-timer-display').innerText = '--';
+        }
+
+        function startChessTimer(state) {
+            const turnStats = getRoleCharacterStats(state, state.turn);
+            const timerSeconds = turnStats.chessTime;
+            const syncKey = `${state.turn}-${state.phase}-${state.chessMovesLeft}-${state.fen}`;
+            if (chessTimerSyncKey === syncKey) return;
+
+            stopChessTimer();
+            chessTimerSyncKey = syncKey;
+            let remain = timerSeconds;
+            const timerEl = document.getElementById('chess-timer-display');
+            timerEl.innerText = `${remain}`;
+
+            chessTimerInterval = setInterval(() => {
+                remain -= 1;
+                if (remain <= 0) {
+                    stopChessTimer();
+                    handleChessTimeout(state.turn);
+                    return;
+                }
+                timerEl.innerText = `${remain}`;
+            }, 1000);
+        }
+
+        function handleChessTimeout(expiredRole) {
+            if (!roomRef) return;
+            roomRef.child('gameState').get().then((snapshot) => {
+                if (!snapshot.exists()) return;
+                const liveState = snapshot.val();
+                if (liveState.winner || liveState.phase !== 'CHESS' || liveState.turn !== expiredRole) return;
+                const winner = expiredRole === 'w' ? 'b' : 'w';
+                liveState.winner = winner;
+                roomRef.child('gameState').update(liveState);
+                sendLog(`[TIMEOUT] ${expiredRole === 'w' ? 'WHITE' : 'BLACK'} 시간 초과! ${winner === 'w' ? 'WHITE' : 'BLACK'} 승리`);
+            });
+        }
+
+        // ==========================================
+        // 5. BOXING LOGIC (클라이언트 계산 -> DB 덮어쓰기)
+        // ==========================================
+        function doBoxingAction(action) {
+            if (myRole === 'spectator' || !roomRef) return;
+            if (!['JAB', 'HOOK', 'GUARD', 'COUNTER'].includes(action)) return;
+
+            roomRef.child('gameState').get().then((snapshot) => {
+                if (!snapshot.exists()) return;
+                const state = snapshot.val();
+                state.characters = normalizeCharacters(state.characters);
+                state.boxingSelections = normalizeBoxingSelections(state.boxingSelections);
+
+                if (!isCharacterSelectionReady(state)) return;
+                if (state.phase !== 'BOXING' || state.winner) return;
+                if (state.boxingSelections[myRole]) return;
+
+                state.boxingSelections[myRole] = action;
+                roomRef.child('gameState').update({
+                    boxingSelections: state.boxingSelections
+                }).then(() => {
+                    resolveBoxingRoundIfReady();
+                });
+            });
+        }
+
+        // ==========================================
+        // 6. CHESS LOGIC (chess.js + DOM Rendering)
+        // ==========================================
+        function renderChessBoard() {
+            const boardDiv = document.getElementById('board');
+            boardDiv.innerHTML = '';
+            
+            // FEN 문자열로 2차원 배열 가져오기
+            const board = chess.board(); 
+            
+            // 흑백 시점 전환 (내 시점에 맞춰 보드 뒤집기)
+            const isBlack = (myRole === 'b');
+            
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const r = isBlack ? 7 - i : i;
+                    const c = isBlack ? 7 - j : j;
+                    
+                    const squareColor = (r + c) % 2 === 0 ? 'square-light' : 'square-dark';
+                    const squareId = String.fromCharCode(97 + c) + (8 - r); // ex: e2, d4
+                    
+                    const cell = document.createElement('div');
+                    cell.className = `square ${squareColor}`;
+                    cell.id = squareId;
+                    
+                    // 선택된 기물 하이라이트
+                    if (selectedSquare === squareId) cell.classList.add('selected');
+                    
+                    // 합법적 이동 경로 표시
+                    if (selectedSquare) {
+                        const moves = chess.moves({ square: selectedSquare, verbose: true });
+                        if (moves.some(m => m.to === squareId)) cell.classList.add('valid-move');
+                    }
+
+                    // 기물 렌더링 (유니코드 체스말 사용)
+                    const piece = board[r][c];
+                    if (piece) {
+                        cell.innerText = getPieceSymbol(piece.type, piece.color);
+                        // 체스말 텍스트 색상
+                        cell.style.color = piece.color === 'w' ? '#ffffff' : '#000000';
+                        if (piece.color === 'w') cell.style.textShadow = "2px 2px 0 #000";
+                    }
+
+                    // 클릭 이벤트
+                    cell.onclick = () => handleSquareClick(squareId);
+                    boardDiv.appendChild(cell);
+                }
+            }
+        }
+
+        function getPieceSymbol(type, color) {
+            const symbols = {
+                w: { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' },
+                b: { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' }
+            };
+            return symbols[color][type];
+        }
+
+        function handleSquareClick(squareId) {
+            if (!isMyTurn || myRole === 'spectator') return;
+
+            // 1. 이미 내 기물이 선택된 상태에서 타겟 칸을 클릭한 경우 (이동 시도)
+            if (selectedSquare) {
+                const move = chess.move({
+                    from: selectedSquare,
+                    to: squareId,
+                    promotion: 'q' // 폰 승급은 퀸으로 고정 (단순화)
+                });
+
+                if (move) {
+                    // 이동 성공
+                    selectedSquare = null;
+                    renderChessBoard(); // 내 수 직후 즉시 화면 반영
+                    completeChessTurn(move);
+                    return;
+                }
+            }
+
+            // 2. 내 기물을 새로 선택하는 경우
+            const piece = chess.get(squareId);
+            if (piece && piece.color === myRole) {
+                selectedSquare = squareId;
+            } else {
+                selectedSquare = null;
+            }
+            renderChessBoard(); // UI 갱신
+        }
+
+        function completeChessTurn(move) {
+            stopChessTimer();
+            roomRef.child('gameState').get().then((snapshot) => {
+                const state = snapshot.val();
+                
+                // 체크메이트 확인
+                let logMsg = `[CHESS] ${move.from} -> ${move.to}`;
+                if (chess.in_checkmate()) {
+                    state.winner = myRole;
+                    logMsg += ` ♚ CHECKMATE! ${myNickname} 승리!`;
+                } else if (chess.in_check()) {
+                    logMsg += " (CHECK!)";
+                }
+
+                // 턴 및 페이즈 관리
+                state.chessMovesLeft -= 1;
+                state.turn = myRole === 'w' ? 'b' : 'w';
+                state.fen = chess.fen();
+                
+                if (state.chessMovesLeft <= 0 && !state.winner) {
+                    state.phase = 'BOXING';
+                    state.boxingTurnsLeft = MAX_BOXING_TURNS;
+                    state.boxingRound = 1;
+                    state.boxingSelections = { w: null, b: null };
+                    logMsg += " 🔔 딩딩! 복싱 페이즈로 넘어갑니다.";
+                }
+
+                roomRef.child('gameState').update(state);
+                sendLog(logMsg);
+            });
+        }
+
+        // ==========================================
+        // 7. UTILS & EMOTES
+        // ==========================================
+        function sendLog(text) {
+            roomRef.child('logs').push({ text: text });
+        }
+
+        function addLogToBox(text) {
+            const box = document.getElementById('combat-log');
+            const p = document.createElement('p');
+            p.innerText = text;
+            
+            // 데미지 텍스트 빨간색 하이라이트
+            if (text.includes('HP')) p.classList.add('text-red-400', 'font-bold');
+            if (text.includes('CHESS')) p.classList.add('text-blue-300');
+            
+            box.appendChild(p);
+            box.scrollTop = box.scrollHeight; // 자동 스크롤
+        }
+
+        function sendEmote(emoteMsg) {
+            if (myRole === 'spectator') return;
+            roomRef.child('emotes').push({
+                sender: myRole,
+                msg: emoteMsg,
+                ts: Date.now()
+            });
+        }
+
+        function sendCharacterEmote(category) {
+            if (myRole === 'spectator') return;
+
+            const characterKey = getRoleCharacterKey(latestGameState, myRole);
+            if (!characterKey) return;
+
+            const emotePool = CHARACTER_EMOTES[characterKey]?.[category];
+            if (!emotePool || emotePool.length === 0) return;
+
+            const randomIndex = Math.floor(Math.random() * emotePool.length);
+            sendEmote(emotePool[randomIndex]);
+        }
+
+        function showEmote(emoteData) {
+            // 보낸 사람이 w인지 b인지에 따라 띄울 위치 결정
+            const anchorId = emoteData.sender === 'w' ? 'emote-anchor-w' : 'emote-anchor-b';
+            const anchor = document.getElementById(anchorId);
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'emote-bubble';
+            bubble.innerText = emoteData.msg;
+            
+            anchor.appendChild(bubble);
+            
+            // 애니메이션 끝나면 DOM 제거
+            setTimeout(() => {
+                bubble.remove();
+            }, 2500);
+        }
+
+        function showGameOver(winnerId) {
+            stopChessTimer();
+            const modal = document.getElementById('game-over-modal');
+            const msgEl = document.getElementById('end-msg');
+            
+            if (winnerId === myRole) {
+                msgEl.innerText = "YOU WIN!";
+                msgEl.className = "text-4xl text-green-400 mb-8 font-bold";
+            } else if (myRole === 'spectator') {
+                msgEl.innerText = `${winnerId === 'w' ? 'WHITE' : 'BLACK'} WINS!`;
+            } else {
+                msgEl.innerText = "YOU LOSE...";
+                msgEl.className = "text-4xl text-gray-500 mb-8 font-bold";
+            }
+            
+            modal.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
