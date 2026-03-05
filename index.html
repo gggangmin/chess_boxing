@@ -118,109 +118,83 @@
         /* Mobile layout and emote tuning */
         @media (max-width: 1024px) {
             body {
-                padding: 0;
-                margin: 0;
-                overflow: hidden; /* 스크롤 완벽 차단 */
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                padding: 10px;
+                /* 세로 스크롤 허용, 가로 스크롤 차단 */
+                overflow-x: hidden;
+                overflow-y: auto; 
+                align-items: flex-start; /* 컨텐츠를 화면 위에서부터 배치 */
             }
 
-            /* 기존 fixed와 left: 50% 속성을 완벽히 무력화하고 꽉 채움 */
             #game-screen {
                 position: relative !important;
                 top: 0 !important;
                 left: 0 !important;
-                transform: none !important; 
+                transform: none !important; /* 강제 축소 제거 (가로 잘림 해결) */
                 width: 100% !important;
-                height: 100dvh !important;
                 max-width: 100vw !important;
+                height: auto !important; /* 내용물만큼 세로로 길어지게 허용 (겹침 해결) */
+                min-height: 100dvh;
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
-                padding: 8px;
+                gap: 16px;
+                margin: 0 auto;
                 box-sizing: border-box;
             }
 
-            /* 상/하단 패널이 세로 공간을 균율하게 나누도록 설정 */
             #left-panel,
             #right-panel {
                 width: 100%;
-                flex: 1;
-                min-height: 0;
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 12px;
             }
 
-            /* 모바일에 맞춰 박스 여백 및 폰트 크기 슬림화 */
-            .pixel-box { 
-                padding: 10px !important; 
-                box-sizing: border-box;
+            /* 이모트 말풍선(도발) 화면 밖으로 안 나가게 고정 */
+            .emote-bubble {
+                min-width: 140px;
+                max-width: 80vw;
             }
-            .text-4xl { font-size: 1.5rem; line-height: 1.2; }
-            .text-2xl { font-size: 1.2rem; line-height: 1.2; }
-            .text-xl { font-size: 0.95rem; line-height: 1.2; }
-            .py-3 { padding-top: 8px; padding-bottom: 8px; }
-            
-            /* 플레이어 아이콘 및 복싱 버튼 최적화 */
-            .fighter-icon { width: 48px; height: 48px; }
-            #boxing-controls .grid { gap: 4px; }
-            .pixel-btn { font-size: 0.9rem !important; }
+            #emote-anchor-b { right: 0 !important; left: auto !important; }
+            #emote-anchor-w { left: 0 !important; right: auto !important; }
 
-            /* 전투 로그 창 (유동적으로 높이 확보) */
+            /* 전투 로그 창 높이 고정 */
             #combat-log-container {
-                flex: none;
-                height: 14dvh;
-                min-height: 60px;
+                height: 160px;
                 margin-bottom: 0;
             }
 
-            /* 체스판과 타이머 영역 */
+            /* 체스판 및 타이머 (세로 스크롤이므로 넉넉하게 배치) */
             #board-play-area {
-                flex: 1;
-                min-height: 0;
                 display: flex;
-                flex-direction: row; /* 타이머를 체스판 옆에 배치 */
+                flex-direction: column; /* 모바일에서는 체스판 아래에 타이머 배치 */
                 align-items: center;
-                justify-content: center;
-                gap: 8px;
+                gap: 16px;
+                width: 100%;
             }
 
-            /* 체스판이 찌그러지지 않고 정사각형 유지 */
             #board-container {
-                height: 100%;
-                max-height: 38dvh; /* 세로가 너무 길어지지 않도록 방어 */
-                aspect-ratio: 1; 
+                width: 100%;
+                max-width: 480px; /* 너무 커지는 것만 방지 */
                 display: flex;
-                align-items: center;
                 justify-content: center;
-                flex: none;
+                padding: 10px;
             }
+            
             #board {
                 width: 100%;
-                height: 100%;
-                aspect-ratio: 1;
+                height: auto;
+                aspect-ratio: 1; /* 정사각형 유지 */
             }
-            .square { font-size: clamp(1.2rem, 4.5dvh, 2.5rem); }
 
-            /* 타이머 패널 크기 축소 */
-            #chess-timer-panel { 
-                min-width: 70px; 
-                padding: 10px; 
-                flex: none;
+            /* 체스말 폰트 크기 반응형 */
+            .square {
+                font-size: clamp(1.5rem, 8vw, 2.5rem);
             }
-            #chess-timer-display { font-size: 2rem; }
 
-            /* 모바일 이모트 말풍선 최적화 */
-            .emote-bubble {
-                min-width: 140px;
-                max-width: 65vw;
-                font-size: 1rem;
-                padding: 4px 8px;
+            #chess-timer-panel {
+                width: 100%;
+                max-width: 200px;
             }
-            #emote-anchor-b { right: 0 !important; left: auto !important; top: -5px; }
-            #emote-anchor-w { left: 0 !important; right: auto !important; top: -5px; }
         }
         @keyframes popUp {
             0% { opacity: 0; transform: translateY(10px) scale(0.8); }
