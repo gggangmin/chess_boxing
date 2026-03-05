@@ -106,56 +106,93 @@
             word-break: keep-all;
             overflow-wrap: break-word;
         }
+        #emote-anchor-b .emote-bubble {
+            right: 0;
+            transform-origin: top right;
+        }
+        #emote-anchor-w .emote-bubble {
+            left: 0;
+            transform-origin: top left;
+        }
 
-        /* Mobile: fit layout by viewport height */
+        /* Mobile layout and emote tuning */
         @media (max-width: 1024px) {
             body {
-                padding: 0.5rem;
+                padding: 0;
+                margin: 0;
                 overflow: hidden;
-                align-items: flex-start;
             }
 
             #game-screen {
-                position: fixed;
-                top: 0.5rem;
-                left: 50%;
-                width: min(96vw, 980px);
-                max-width: none;
-                transform: translateX(-50%) scale(min(1, calc((100dvh - 1rem) / 980)));
-                transform-origin: top center;
-                gap: 0.5rem;
+                position: static;
+                width: 100vw;
+                height: 100dvh;
+                max-width: 100%;
+                transform: none;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                padding: 6px;
+                box-sizing: border-box;
             }
 
             #left-panel,
             #right-panel {
-                gap: 0.5rem;
+                width: 100%;
+                gap: 6px;
+                flex: 1;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-evenly;
             }
+
+            .pixel-box { padding: 8px !important; }
+            .text-4xl { font-size: 1.5rem; line-height: 1.2; }
+            .text-2xl { font-size: 1.2rem; line-height: 1.2; }
+            .text-xl { font-size: 0.95rem; line-height: 1.2; }
+            .py-3 { padding-top: 8px; padding-bottom: 8px; }
+
+            .fighter-icon { width: 44px; height: 44px; }
+
+            .emote-bubble {
+                min-width: 140px;
+                max-width: 65vw;
+                font-size: 1rem;
+                padding: 4px 8px;
+            }
+            #emote-anchor-b { right: 0 !important; left: auto !important; top: -5px; }
+            #emote-anchor-w { left: 0 !important; right: auto !important; top: -5px; }
 
             #combat-log-container {
-                height: clamp(84px, 14dvh, 140px);
-                margin-bottom: 0.5rem;
+                flex: 0 1 12dvh;
+                min-height: 60px;
+                margin-bottom: 0;
             }
 
+            #board-play-area {
+                flex: 1;
+                min-height: 0;
+                align-items: center;
+                gap: 4px;
+            }
+            #board-container {
+                height: 100%;
+                max-height: 42dvh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
             #board {
-                max-width: min(56dvh, 94vw);
+                height: 100%;
+                width: auto;
+                aspect-ratio: 1;
+                max-width: 95vw;
             }
-
-            .square {
-                font-size: clamp(1.3rem, 3.6dvh, 2.2rem);
-            }
-
-            #emote-anchor-b {
-                right: auto !important;
-                left: 0 !important;
-            }
-            #emote-anchor-w {
-                left: 0 !important;
-                right: auto !important;
-            }
-            .emote-bubble {
-                min-width: 180px;
-                max-width: min(88vw, 320px);
-            }
+            .square { font-size: clamp(1.5rem, 5dvh, 3rem); }
+            
+            #chess-timer-panel { min-width: 80px; padding: 8px; }
+            #chess-timer-display { font-size: 2.5rem; }
         }
         @keyframes popUp {
             0% { opacity: 0; transform: translateY(10px) scale(0.8); }
